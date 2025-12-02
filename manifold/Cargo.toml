@@ -1,0 +1,12 @@
+[package]
+name = "manifold"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glam = "0.30.9"
+stl_io = "0.10.0"
+
+[[bin]]
+name = "manifold-cube-example"
+path = "src/bin/cube_example.rs"

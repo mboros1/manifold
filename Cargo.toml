@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "manifold",
+    "manifold-view",
+]
+resolver = "2"

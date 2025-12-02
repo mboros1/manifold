@@ -423,6 +423,7 @@ fn stl_instantiate_ready(
                 base_color: Color::srgb_u8(210, 210, 210),
                 metallic: 0.02,
                 perceptual_roughness: 0.8,
+                cull_mode: None,
                 ..Default::default()
             });
             let (min, max) = compute_bounds(&data.positions);

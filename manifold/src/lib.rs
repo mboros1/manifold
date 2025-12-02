@@ -1,9 +1,9 @@
 pub mod prelude {
     pub use crate::{Solid3, Triangle};
-    pub use glam::Vec3;
+    pub use glam::{Mat4, Quat, Vec3};
 }
 
-use glam::Vec3;
+use glam::{Mat4, Quat, Vec3};
 
 /// A single triangle in 3D space.
 #[derive(Clone, Copy, Debug)]
@@ -70,6 +70,96 @@ impl Solid3 {
         Self::new(tris)
     }
 
+    /// Cylinder aligned to +Z, centered at origin.
+    /// `radius` and `height` are in whatever units you choose; `segments` controls roundness.
+    pub fn cylinder_z(radius: f32, height: f32, segments: u32) -> Self {
+        assert!(segments >= 3, "cylinder_z: need at least 3 segments");
+        let h = height * 0.5;
+
+        let mut tris = Vec::with_capacity((segments as usize) * 4);
+
+        let top_center = Vec3::new(0.0, 0.0, h);
+        let bot_center = Vec3::new(0.0, 0.0, -h);
+
+        for i in 0..segments {
+            let t0 = i as f32 / segments as f32;
+            let t1 = (i + 1) as f32 / segments as f32;
+
+            let a = angle_to_xy(radius, t0);
+            let b = angle_to_xy(radius, t1);
+
+            let top_a = Vec3::new(a.x, a.y, h);
+            let top_b = Vec3::new(b.x, b.y, h);
+            let bot_a = Vec3::new(a.x, a.y, -h);
+            let bot_b = Vec3::new(b.x, b.y, -h);
+
+            // Top cap (CCW from +Z)
+            tris.push(Triangle {
+                a: top_center,
+                b: top_b,
+                c: top_a,
+            });
+
+            // Bottom cap (CCW from -Z)
+            tris.push(Triangle {
+                a: bot_center,
+                b: bot_a,
+                c: bot_b,
+            });
+
+            // Side quad split into two tris, outward facing
+            tris.push(Triangle {
+                a: bot_a,
+                b: bot_b,
+                c: top_b,
+            });
+            tris.push(Triangle {
+                a: bot_a,
+                b: top_b,
+                c: top_a,
+            });
+        }
+
+        Self::new(tris)
+    }
+
+    /// General transform by a 4x4 matrix.
+    pub fn transform(mut self, m: Mat4) -> Self {
+        for tri in &mut self.triangles {
+            tri.a = m.transform_point3(tri.a);
+            tri.b = m.transform_point3(tri.b);
+            tri.c = m.transform_point3(tri.c);
+        }
+        self
+    }
+
+    /// Translate by an offset.
+    pub fn translate(self, offset: Vec3) -> Self {
+        self.transform(Mat4::from_translation(offset))
+    }
+
+    /// Uniform scale about the origin.
+    pub fn scale_uniform(self, s: f32) -> Self {
+        self.transform(Mat4::from_scale(Vec3::splat(s)))
+    }
+
+    /// Non-uniform scale about the origin.
+    pub fn scale_non_uniform(self, s: Vec3) -> Self {
+        self.transform(Mat4::from_scale(s))
+    }
+
+    /// Rotate about an axis through the origin by radians.
+    pub fn rotate_axis_angle(self, axis: Vec3, angle_rad: f32) -> Self {
+        let q = Quat::from_axis_angle(axis.normalize_or_zero(), angle_rad);
+        self.transform(Mat4::from_quat(q))
+    }
+
+    /// Simple mesh concatenation "union".
+    pub fn merge(mut self, other: &Solid3) -> Self {
+        self.triangles.extend_from_slice(&other.triangles);
+        self
+    }
+
     /// Export this solid as a binary STL file.
     pub fn write_stl_binary<P: AsRef<std::path::Path>>(
         &self,
@@ -96,4 +186,9 @@ impl Solid3 {
 
         stl_io::write_stl(&mut writer, stl_triangles.iter())
     }
+}
+
+fn angle_to_xy(radius: f32, t: f32) -> Vec3 {
+    let theta = t * std::f32::consts::TAU;
+    Vec3::new(radius * theta.cos(), radius * theta.sin(), 0.0)
 }

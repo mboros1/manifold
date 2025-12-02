@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -56,43 +55,38 @@ mod stl_loader {
             let mut cursor = std::io::Cursor::new(&bytes);
             let mesh = stl_io::read_stl(&mut cursor)?;
 
-            let positions: Vec<[f32; 3]> =
-                mesh.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
-
+            let mut positions: Vec<[f32; 3]> = Vec::with_capacity(mesh.faces.len() * 3);
+            let mut normals: Vec<[f32; 3]> = Vec::with_capacity(mesh.faces.len() * 3);
             let mut indices: Vec<u32> = Vec::with_capacity(mesh.faces.len() * 3);
-            for tri in &mesh.faces {
-                indices.push(tri.vertices[0] as u32);
-                indices.push(tri.vertices[1] as u32);
-                indices.push(tri.vertices[2] as u32);
-            }
+            let mut next_index: u32 = 0;
 
-            let mut normal_acc: HashMap<usize, Vec<Vec3>> = HashMap::new();
             for tri in &mesh.faces {
                 let i0 = tri.vertices[0] as usize;
                 let i1 = tri.vertices[1] as usize;
                 let i2 = tri.vertices[2] as usize;
-                let p0 = Vec3::from(positions[i0]);
-                let p1 = Vec3::from(positions[i1]);
-                let p2 = Vec3::from(positions[i2]);
-                let n = (p1 - p0).cross(p2 - p0).normalize_or_zero();
-                normal_acc.entry(i0).or_default().push(n);
-                normal_acc.entry(i1).or_default().push(n);
-                normal_acc.entry(i2).or_default().push(n);
-            }
 
-            let mut normals: Vec<[f32; 3]> = Vec::with_capacity(positions.len());
-            for i in 0..positions.len() {
-                let n = normal_acc
-                    .get(&i)
-                    .map(|ns| {
-                        let mut s = Vec3::ZERO;
-                        for v in ns {
-                            s += *v;
-                        }
-                        s.normalize_or_zero()
-                    })
-                    .unwrap_or(Vec3::Y);
-                normals.push([n.x, n.y, n.z]);
+                let p0_arr: [f32; 3] = mesh.vertices[i0].into();
+                let p1_arr: [f32; 3] = mesh.vertices[i1].into();
+                let p2_arr: [f32; 3] = mesh.vertices[i2].into();
+                let p0 = Vec3::from(p0_arr);
+                let p1 = Vec3::from(p1_arr);
+                let p2 = Vec3::from(p2_arr);
+
+                let n = (p1 - p0).cross(p2 - p0).normalize_or_zero();
+                let n_arr = [n.x, n.y, n.z];
+
+                positions.push([p0.x, p0.y, p0.z]);
+                positions.push([p1.x, p1.y, p1.z]);
+                positions.push([p2.x, p2.y, p2.z]);
+
+                normals.push(n_arr);
+                normals.push(n_arr);
+                normals.push(n_arr);
+
+                indices.push(next_index);
+                indices.push(next_index + 1);
+                indices.push(next_index + 2);
+                next_index += 3;
             }
 
             Ok(StlMesh {

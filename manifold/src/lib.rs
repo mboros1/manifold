@@ -86,7 +86,9 @@ impl Solid3 {
     }
 
     pub fn empty() -> Self {
-        Self { triangles: Vec::new() }
+        Self {
+            triangles: Vec::new(),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -99,40 +101,88 @@ impl Solid3 {
         let h = size * 0.5;
 
         let p000 = Vec3::new(-h, -h, -h);
-        let p001 = Vec3::new(-h, -h,  h);
-        let p010 = Vec3::new(-h,  h, -h);
-        let p011 = Vec3::new(-h,  h,  h);
-        let p100 = Vec3::new( h, -h, -h);
-        let p101 = Vec3::new( h, -h,  h);
-        let p110 = Vec3::new( h,  h, -h);
-        let p111 = Vec3::new( h,  h,  h);
+        let p001 = Vec3::new(-h, -h, h);
+        let p010 = Vec3::new(-h, h, -h);
+        let p011 = Vec3::new(-h, h, h);
+        let p100 = Vec3::new(h, -h, -h);
+        let p101 = Vec3::new(h, -h, h);
+        let p110 = Vec3::new(h, h, -h);
+        let p111 = Vec3::new(h, h, h);
 
         // 12 triangles (2 per face), right-handed.
         let mut tris = Vec::with_capacity(12);
 
         // -X face
-        tris.push(Triangle { a: p000, b: p001, c: p011 });
-        tris.push(Triangle { a: p000, b: p011, c: p010 });
+        tris.push(Triangle {
+            a: p000,
+            b: p001,
+            c: p011,
+        });
+        tris.push(Triangle {
+            a: p000,
+            b: p011,
+            c: p010,
+        });
 
         // +X face
-        tris.push(Triangle { a: p100, b: p110, c: p111 });
-        tris.push(Triangle { a: p100, b: p111, c: p101 });
+        tris.push(Triangle {
+            a: p100,
+            b: p110,
+            c: p111,
+        });
+        tris.push(Triangle {
+            a: p100,
+            b: p111,
+            c: p101,
+        });
 
         // -Y face
-        tris.push(Triangle { a: p000, b: p100, c: p101 });
-        tris.push(Triangle { a: p000, b: p101, c: p001 });
+        tris.push(Triangle {
+            a: p000,
+            b: p100,
+            c: p101,
+        });
+        tris.push(Triangle {
+            a: p000,
+            b: p101,
+            c: p001,
+        });
 
         // +Y face
-        tris.push(Triangle { a: p010, b: p011, c: p111 });
-        tris.push(Triangle { a: p010, b: p111, c: p110 });
+        tris.push(Triangle {
+            a: p010,
+            b: p011,
+            c: p111,
+        });
+        tris.push(Triangle {
+            a: p010,
+            b: p111,
+            c: p110,
+        });
 
         // -Z face
-        tris.push(Triangle { a: p000, b: p010, c: p110 });
-        tris.push(Triangle { a: p000, b: p110, c: p100 });
+        tris.push(Triangle {
+            a: p000,
+            b: p010,
+            c: p110,
+        });
+        tris.push(Triangle {
+            a: p000,
+            b: p110,
+            c: p100,
+        });
 
         // +Z face
-        tris.push(Triangle { a: p001, b: p101, c: p111 });
-        tris.push(Triangle { a: p001, b: p111, c: p011 });
+        tris.push(Triangle {
+            a: p001,
+            b: p101,
+            c: p111,
+        });
+        tris.push(Triangle {
+            a: p001,
+            b: p111,
+            c: p011,
+        });
 
         Self::new(tris)
     }
@@ -246,6 +296,55 @@ impl Solid3 {
 
     pub fn triangle_count(&self) -> usize {
         self.triangles.len()
+    }
+
+    /// Revolve a (radius, z) polyline around the +Z axis.
+    /// `profile[i].x` is radius (clamped at 0), `profile[i].y` is z height.
+    pub fn lathe_z(profile: &[Vec2], segments: u32) -> Self {
+        assert!(
+            profile.len() >= 2,
+            "lathe_z: need at least 2 profile points"
+        );
+        assert!(segments >= 3, "lathe_z: need at least 3 angular segments");
+
+        let mut tris = Vec::with_capacity((profile.len() - 1) * segments as usize * 2);
+
+        for seg in 0..segments {
+            let t0 = seg as f32 / segments as f32;
+            let t1 = (seg + 1) as f32 / segments as f32;
+            let th0 = t0 * std::f32::consts::TAU;
+            let th1 = t1 * std::f32::consts::TAU;
+            let (c0, s0) = (th0.cos(), th0.sin());
+            let (c1, s1) = (th1.cos(), th1.sin());
+
+            for i in 0..(profile.len() - 1) {
+                let v0 = profile[i];
+                let v1 = profile[i + 1];
+                let r0 = v0.x.max(0.0);
+                let r1 = v1.x.max(0.0);
+                let z0 = v0.y;
+                let z1 = v1.y;
+
+                let p00 = Vec3::new(r0 * c0, r0 * s0, z0);
+                let p01 = Vec3::new(r0 * c1, r0 * s1, z0);
+                let p10 = Vec3::new(r1 * c0, r1 * s0, z1);
+                let p11 = Vec3::new(r1 * c1, r1 * s1, z1);
+
+                // Quad (p00, p10, p11, p01) split into two outward-facing triangles.
+                tris.push(Triangle {
+                    a: p00,
+                    b: p10,
+                    c: p11,
+                });
+                tris.push(Triangle {
+                    a: p00,
+                    b: p11,
+                    c: p01,
+                });
+            }
+        }
+
+        Solid3::new(tris)
     }
 
     /// Extrude a 2D profile along +Z by `height`. Assumes simple, convex CCW polygon.
